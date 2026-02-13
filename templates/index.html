@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Link Tools</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --bg2: #16213e;
+  --bg3: #0f3460;
+  --surface: #1f2940;
+  --surface2: #263250;
+  --accent: #e94560;
+  --accent2: #0ea5e9;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --border: #334155;
+  --radius: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,-apple-system,sans-serif; min-height:100vh; }
+a { color:var(--accent2); text-decoration:none; }
+a:hover { text-decoration:underline; }
+
+/* ── Header ── */
+.header { background:var(--bg2); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:20px; font-weight:600; }
+
+/* ── Tabs ── */
+.tabs { display:flex; background:var(--bg2); border-bottom:1px solid var(--border); padding:0 24px; gap:0; }
+.tab { padding:12px 20px; font-size:14px; color:var(--text2); cursor:pointer; border-bottom:2px solid transparent; transition:.15s; }
+.tab:hover { color:var(--text); background:rgba(255,255,255,.03); }
+.tab.active { color:var(--accent2); border-bottom-color:var(--accent2); }
+.tab-content { display:none; padding:24px; max-width:1400px; margin:0 auto; }
+.tab-content.active { display:block; }
+
+/* ── Forms ── */
+input, select, textarea {
+  background:var(--bg); color:var(--text); border:1px solid var(--border);
+  border-radius:var(--radius); padding:8px 12px; font-size:14px; outline:none;
+}
+input:focus, select:focus, textarea:focus { border-color:var(--accent2); }
+textarea { resize:vertical; font-family:monospace; }
+.form-row { display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.form-row label { font-size:13px; color:var(--text2); margin-bottom:4px; display:block; }
+.form-group { display:flex; flex-direction:column; }
+
+/* ── Buttons ── */
+.btn {
+  padding:8px 16px; border:none; border-radius:var(--radius); font-size:14px;
+  cursor:pointer; transition:.15s; display:inline-flex; align-items:center; gap:6px;
+}
+.btn-primary { background:var(--accent2); color:#fff; }
+.btn-primary:hover { opacity:.85; }
+.btn-danger { background:var(--red); color:#fff; }
+.btn-danger:hover { opacity:.85; }
+.btn-secondary { background:var(--surface2); color:var(--text); }
+.btn-secondary:hover { background:var(--border); }
+.btn-sm { padding:5px 10px; font-size:12px; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+
+/* ── Cards ── */
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.card-title { font-size:16px; font-weight:600; }
+
+/* ── Table ── */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--border); }
+th { background:var(--surface2); color:var(--text2); font-weight:500; position:sticky; top:0; }
+tr:hover { background:rgba(255,255,255,.02); }
+
+/* ── Status badges ── */
+.badge { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.badge-new { background:rgba(14,165,233,.15); color:var(--accent2); }
+.badge-checked { background:rgba(34,197,94,.15); color:var(--green); }
+.badge-error { background:rgba(234,179,8,.15); color:var(--yellow); }
+.badge-dead { background:rgba(239,68,68,.15); color:var(--red); }
+
+/* ── Parse progress ── */
+.progress-bar { background:var(--bg); border-radius:4px; height:8px; overflow:hidden; }
+.progress-fill { height:100%; background:var(--accent2); transition:width .3s; }
+
+/* ── Toast ── */
+.toast { position:fixed; bottom:20px; right:20px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 20px; font-size:14px; z-index:999; transition:opacity .3s; }
+.toast.success { border-left:3px solid var(--green); }
+.toast.error { border-left:3px solid var(--red); }
+
+/* ── Helpers ── */
+.mt { margin-top:16px; }
+.mb { margin-bottom:16px; }
+.text-sm { font-size:13px; }
+.text-muted { color:var(--text2); }
+.flex { display:flex; }
+.gap { gap:10px; }
+.items-center { align-items:center; }
+.justify-between { justify-content:space-between; }
+.hidden { display:none; }
+</style>
+</head>
+<body>
+
+<!-- ─── HEADER ─── -->
+<div class="header">
+  <h1>Link Tools</h1>
+</div>
+
+<!-- ─── TABS ─── -->
+<div class="tabs">
+  <div class="tab active" data-tab="linkcheck">Link Check</div>
+  <div class="tab" data-tab="domcheck">Domain Check</div>
+</div>
+
+<!-- ══════════════════════ TAB: LINK CHECK ══════════════════════ -->
+<div class="tab-content active" id="tab-linkcheck">
+  <div class="card">
+    <div class="card-header"><span class="card-title">CSV Input (Site, Link, Anchor)</span></div>
+    <p class="text-sm text-muted mb">Format: site_url,expected_link,expected_anchor (one per line). Empty anchor = only check link presence.</p>
+    <textarea id="lcCsv" rows="8" style="width:100%" placeholder="https://example.com,https://somelink.com,some anchor
+https://example.org,https://anotherlink.com,click here"></textarea>
+    <div class="form-row items-center mt">
+      <div class="form-group">
+        <label>Threads</label>
+        <input id="lcThreads" type="number" value="5" min="1" max="20" style="width:70px">
+      </div>
+      <div class="form-group">
+        <label>Timeout (s)</label>
+        <input id="lcTimeout" type="number" value="15" min="5" max="60" style="width:70px">
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" id="btnLcStart" onclick="startLinkCheck()">Check Links</button>
+      </div>
+    </div>
+    <div id="lcError" class="text-sm mt" style="color:var(--red)"></div>
+  </div>
+
+  <!-- Progress -->
+  <div id="lcProgress" class="card hidden">
+    <div class="card-header"><span class="card-title">Progress</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="lcFill"></div></div>
+    <div class="text-sm text-muted mt" id="lcProgressInfo"></div>
+    <div id="lcLog" style="margin-top:8px;max-height:180px;overflow-y:auto;font-size:12px;font-family:monospace;background:var(--bg);border-radius:var(--radius);padding:8px;"></div>
+  </div>
+
+  <!-- Summary cards -->
+  <div id="lcSummary" class="hidden" style="display:none;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
+    <div class="card" style="text-align:center"><div class="text-sm text-muted">Total</div><div style="font-size:22px;font-weight:700" id="lcTotal">0</div></div>
+    <div class="card" style="text-align:center;border-left:3px solid var(--green)"><div class="text-sm text-muted">OK</div><div style="font-size:22px;font-weight:700;color:var(--green)" id="lcOk">0</div></div>
+    <div class="card" style="text-align:center;border-left:3px solid var(--accent2)"><div class="text-sm text-muted">Anchor Mismatch</div><div style="font-size:22px;font-weight:700;color:var(--accent2)" id="lcMismatch">0</div></div>
+    <div class="card" style="text-align:center;border-left:3px solid var(--red)"><div class="text-sm text-muted">Not Found</div><div style="font-size:22px;font-weight:700;color:var(--red)" id="lcNotFound">0</div></div>
+    <div class="card" style="text-align:center;border-left:3px solid var(--text2)"><div class="text-sm text-muted">Errors</div><div style="font-size:22px;font-weight:700;color:var(--text2)" id="lcErrors">0</div></div>
+  </div>
+
+  <!-- Filters + export -->
+  <div id="lcFilters" class="hidden" style="display:none;margin-bottom:12px;">
+    <div class="flex gap items-center justify-between" style="flex-wrap:wrap">
+      <div class="flex gap" style="flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary" onclick="filterLc('all')">All</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterLc('ok')">OK</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterLc('anchor_mismatch')">Anchor Mismatch</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterLc('link_not_found')">Not Found</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterLc('fetch_error')">Errors</button>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="exportLcCsv()">Export CSV</button>
+    </div>
+  </div>
+
+  <!-- Results table -->
+  <div id="lcResultCard" class="card hidden">
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Site</th><th>Expected Link</th><th>Expected Anchor</th><th>Status</th><th>Found Anchors</th><th>Error</th>
+        </tr></thead>
+        <tbody id="lcBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ TAB: DOMAIN CHECK ══════════════════════ -->
+<div class="tab-content" id="tab-domcheck">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Domain Check</span></div>
+    <p class="text-sm text-muted mb">Check your domains for external links and whether they link to target domains.</p>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label>Target domains (one per line)</label>
+        <textarea id="dcTargets" rows="5" style="width:100%" placeholder="target1.com&#10;target2.com&#10;target3.com"></textarea>
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>My domains to scan (one per line)</label>
+        <textarea id="dcDomains" rows="5" style="width:100%" placeholder="my-site1.com&#10;my-site2.com&#10;my-site3.com"></textarea>
+      </div>
+    </div>
+    <div class="form-row items-center mt">
+      <div class="form-group">
+        <label>Threads</label>
+        <input id="dcThreads" type="number" value="5" min="1" max="30" style="width:70px">
+      </div>
+      <div class="form-group">
+        <label>Timeout (s)</label>
+        <input id="dcTimeout" type="number" value="15" min="5" max="60" style="width:70px">
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" id="btnDcStart" onclick="startDomainCheck()">Check</button>
+      </div>
+    </div>
+    <div id="dcError" class="text-sm mt" style="color:var(--red)"></div>
+  </div>
+
+  <!-- Progress -->
+  <div id="dcProgress" class="card hidden">
+    <div class="card-header"><span class="card-title">Progress</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="dcFill"></div></div>
+    <div class="text-sm text-muted mt" id="dcProgressInfo"></div>
+    <div id="dcLog" style="margin-top:8px;max-height:180px;overflow-y:auto;font-size:12px;font-family:monospace;background:var(--bg);border-radius:var(--radius);padding:8px;"></div>
+  </div>
+
+  <!-- Summary cards -->
+  <div id="dcSummary" class="hidden" style="display:none;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+    <div class="card" style="text-align:center"><div class="text-sm text-muted">Total</div><div style="font-size:22px;font-weight:700" id="dcTotal">0</div></div>
+    <div class="card" style="text-align:center;border-left:3px solid var(--green)"><div class="text-sm text-muted">OK</div><div style="font-size:22px;font-weight:700;color:var(--green)" id="dcOkCount">0</div></div>
+    <div class="card" style="text-align:center;border-left:3px solid var(--red)"><div class="text-sm text-muted">Errors</div><div style="font-size:22px;font-weight:700;color:var(--red)" id="dcErrCount">0</div></div>
+  </div>
+
+  <!-- Filters + export -->
+  <div id="dcFilters" class="hidden" style="display:none;margin-bottom:12px;">
+    <div class="flex gap items-center justify-between" style="flex-wrap:wrap">
+      <div class="flex gap" style="flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary" onclick="filterDc('all')">All</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterDc('ok')">OK</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterDc('error')">Errors</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterDc('has_target')">Has Target</button>
+        <button class="btn btn-sm btn-secondary" onclick="filterDc('no_target')">No Target</button>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="exportDcCsv()">Export CSV</button>
+    </div>
+  </div>
+
+  <!-- Results table -->
+  <div id="dcResultCard" class="card hidden">
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="dcHead"></tr></thead>
+        <tbody id="dcBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST ─── -->
+<div id="toast" class="toast hidden"></div>
+
+<script>
+/* ═══════════════════════ UTILITIES ═══════════════════════ */
+
+async function api(url, opts = {}) {
+  const r = await fetch(url, {
+    headers: {'Content-Type': 'application/json'},
+    ...opts,
+  });
+  return r.json();
+}
+
+function toast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  setTimeout(() => t.classList.add('hidden'), 3000);
+}
+
+function badge(status) {
+  return `<span class="badge badge-${status}">${status}</span>`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+/* ═══════════════════════ TABS ═══════════════════════ */
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+/* ═══════════════════════ LINK CHECK ═══════════════════════ */
+
+let lcInterval = null;
+let lcResults = [];
+let lcFilter = 'all';
+let lcLastLogLen = 0;
+
+const LC_BADGES = {
+  ok: '<span class="badge badge-checked">OK</span>',
+  anchor_mismatch: '<span class="badge badge-new">Anchor Mismatch</span>',
+  link_not_found: '<span class="badge badge-dead">Not Found</span>',
+  fetch_error: '<span class="badge badge-error">Fetch Error</span>',
+};
+
+async function startLinkCheck() {
+  const csv = document.getElementById('lcCsv').value.trim();
+  if (!csv) { document.getElementById('lcError').textContent = 'Please enter CSV data'; return; }
+  document.getElementById('lcError').textContent = '';
+
+  document.getElementById('btnLcStart').disabled = true;
+  lcResults = [];
+  lcLastLogLen = 0;
+  document.getElementById('lcLog').innerHTML = '';
+
+  const threads = document.getElementById('lcThreads').value;
+  const timeout = document.getElementById('lcTimeout').value;
+
+  const r = await api('/api/link-check/start', {
+    method: 'POST',
+    body: JSON.stringify({csv, threads: parseInt(threads), timeout: parseInt(timeout)}),
+  });
+
+  if (r.error) {
+    document.getElementById('lcError').textContent = r.error;
+    document.getElementById('btnLcStart').disabled = false;
+    return;
+  }
+
+  document.getElementById('lcProgress').classList.remove('hidden');
+  hideLcResults();
+  lcInterval = setInterval(pollLinkCheck, 800);
+}
+
+async function pollLinkCheck() {
+  const s = await api('/api/link-check/status');
+  const pct = s.total_sites ? Math.round(s.checked_sites / s.total_sites * 100) : 0;
+  document.getElementById('lcFill').style.width = pct + '%';
+  document.getElementById('lcProgressInfo').textContent =
+    `${s.checked_sites} / ${s.total_sites} sites checked (${s.checked} / ${s.total} rows)` +
+    (s.running ? '' : ' — Done');
+
+  if (s.log && s.log.length > lcLastLogLen) {
+    const logEl = document.getElementById('lcLog');
+    s.log.slice(lcLastLogLen).forEach(e => {
+      const line = document.createElement('div');
+      const time = new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      if (e.status === 'ok') {
+        line.innerHTML = `<span style="color:var(--green)">[${time}] OK</span> ${e.site}`;
+      } else {
+        line.innerHTML = `<span style="color:var(--red)">[${time}] ERR</span> ${e.site} — ${e.error || ''}`;
+      }
+      logEl.appendChild(line);
+    });
+    lcLastLogLen = s.log.length;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  if (!s.running) {
+    clearInterval(lcInterval);
+    lcInterval = null;
+    document.getElementById('btnLcStart').disabled = false;
+    lcResults = s.results || [];
+    showLcResults();
+  }
+}
+
+function hideLcResults() {
+  document.getElementById('lcSummary').style.display = 'none';
+  document.getElementById('lcFilters').style.display = 'none';
+  document.getElementById('lcResultCard').classList.add('hidden');
+}
+
+function showLcResults() {
+  if (!lcResults.length) return;
+
+  const counts = {
+    total: lcResults.length,
+    ok: lcResults.filter(r => r.status === 'ok').length,
+    anchor_mismatch: lcResults.filter(r => r.status === 'anchor_mismatch').length,
+    link_not_found: lcResults.filter(r => r.status === 'link_not_found').length,
+    fetch_error: lcResults.filter(r => r.status === 'fetch_error').length,
+  };
+
+  document.getElementById('lcTotal').textContent = counts.total;
+  document.getElementById('lcOk').textContent = counts.ok;
+  document.getElementById('lcMismatch').textContent = counts.anchor_mismatch;
+  document.getElementById('lcNotFound').textContent = counts.link_not_found;
+  document.getElementById('lcErrors').textContent = counts.fetch_error;
+
+  document.getElementById('lcSummary').style.display = 'grid';
+  document.getElementById('lcFilters').style.display = 'flex';
+  document.getElementById('lcResultCard').classList.remove('hidden');
+  renderLcTable();
+}
+
+function filterLc(status) {
+  lcFilter = status;
+  document.querySelectorAll('#lcFilters .btn').forEach(b => {
+    b.className = 'btn btn-sm ' + (b.textContent.trim().toLowerCase().replace(/ /g,'_') === status || (status === 'all' && b.textContent.trim() === 'All')
+      ? 'btn-primary' : 'btn-secondary');
+  });
+  renderLcTable();
+}
+
+function renderLcTable() {
+  const filtered = lcFilter === 'all' ? lcResults : lcResults.filter(r => r.status === lcFilter);
+  const body = document.getElementById('lcBody');
+  body.innerHTML = filtered.map(r => {
+    const foundAnchors = (r.found_anchors || []).join(' | ') || '—';
+    return `<tr>
+      <td>${r.row_num}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <a href="${r.site}" target="_blank">${r.site}</a></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <a href="${r.expected_link}" target="_blank">${r.expected_link}</a></td>
+      <td>${r.expected_anchor || '<span class="text-muted">—</span>'}</td>
+      <td>${LC_BADGES[r.status] || r.status}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${foundAnchors}</td>
+      <td style="font-size:12px;color:var(--red)">${r.error || ''}</td>
+    </tr>`;
+  }).join('');
+  if (!filtered.length) {
+    body.innerHTML = '<tr><td colspan="7" class="text-muted">No results match the selected filter.</td></tr>';
+  }
+}
+
+function exportLcCsv() {
+  if (!lcResults.length) return toast('No results to export', 'error');
+  const filtered = lcFilter === 'all' ? lcResults : lcResults.filter(r => r.status === lcFilter);
+  let csv = 'Row,Site,Expected Link,Expected Anchor,Status,Found Anchors,Error\n';
+  filtered.forEach(r => {
+    csv += [
+      r.row_num,
+      '"' + r.site + '"',
+      '"' + r.expected_link + '"',
+      '"' + (r.expected_anchor || '') + '"',
+      r.status,
+      '"' + (r.found_anchors || []).join(' | ') + '"',
+      '"' + (r.error || '') + '"',
+    ].join(',') + '\n';
+  });
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'link_check_results.csv';
+  a.click();
+}
+
+/* ═══════════════════════ DOMAIN CHECK ═══════════════════════ */
+
+let dcInterval = null;
+let dcResults = [];
+let dcTargetDomains = [];
+let dcFilterVal = 'all';
+let dcLastLogLen = 0;
+
+async function startDomainCheck() {
+  const domains = document.getElementById('dcDomains').value.trim();
+  const targets = document.getElementById('dcTargets').value.trim();
+  if (!domains) { document.getElementById('dcError').textContent = 'Enter domains to scan'; return; }
+  if (!targets) { document.getElementById('dcError').textContent = 'Enter target domains'; return; }
+  document.getElementById('dcError').textContent = '';
+
+  document.getElementById('btnDcStart').disabled = true;
+  dcResults = [];
+  dcLastLogLen = 0;
+  dcFilterVal = 'all';
+  document.getElementById('dcLog').innerHTML = '';
+
+  const threads = document.getElementById('dcThreads').value;
+  const timeout = document.getElementById('dcTimeout').value;
+
+  const r = await api('/api/domain-check/start', {
+    method: 'POST',
+    body: JSON.stringify({domains, targets, threads: parseInt(threads), timeout: parseInt(timeout)}),
+  });
+
+  if (r.error) {
+    document.getElementById('dcError').textContent = r.error;
+    document.getElementById('btnDcStart').disabled = false;
+    return;
+  }
+
+  dcTargetDomains = targets.split('\n').map(d =>
+    d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')
+  ).filter(Boolean);
+
+  document.getElementById('dcProgress').classList.remove('hidden');
+  hideDcResults();
+  dcInterval = setInterval(pollDomainCheck, 800);
+}
+
+async function pollDomainCheck() {
+  const s = await api('/api/domain-check/status');
+  const pct = s.total ? Math.round(s.checked / s.total * 100) : 0;
+  document.getElementById('dcFill').style.width = pct + '%';
+  document.getElementById('dcProgressInfo').textContent =
+    `${s.checked} / ${s.total} domains checked` + (s.running ? '' : ' — Done');
+
+  if (s.log && s.log.length > dcLastLogLen) {
+    const logEl = document.getElementById('dcLog');
+    s.log.slice(dcLastLogLen).forEach(e => {
+      const line = document.createElement('div');
+      const time = new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      if (e.status === 'ok') {
+        line.innerHTML = `<span style="color:var(--green)">[${time}] OK</span> ${e.domain} — <span style="color:var(--accent2)">${e.links} links</span>`;
+      } else {
+        line.innerHTML = `<span style="color:var(--red)">[${time}] ERR</span> ${e.domain} — ${e.error || ''}`;
+      }
+      logEl.appendChild(line);
+    });
+    dcLastLogLen = s.log.length;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  if (!s.running) {
+    clearInterval(dcInterval);
+    dcInterval = null;
+    document.getElementById('btnDcStart').disabled = false;
+    dcResults = s.results || [];
+    showDcResults();
+  }
+}
+
+function hideDcResults() {
+  document.getElementById('dcSummary').style.display = 'none';
+  document.getElementById('dcFilters').style.display = 'none';
+  document.getElementById('dcResultCard').classList.add('hidden');
+}
+
+function showDcResults() {
+  if (!dcResults.length) return;
+
+  const okCount = dcResults.filter(r => r.status === 'ok').length;
+  const errCount = dcResults.filter(r => r.status === 'error').length;
+
+  document.getElementById('dcTotal').textContent = dcResults.length;
+  document.getElementById('dcOkCount').textContent = okCount;
+  document.getElementById('dcErrCount').textContent = errCount;
+
+  document.getElementById('dcSummary').style.display = 'grid';
+  document.getElementById('dcFilters').style.display = 'flex';
+  document.getElementById('dcResultCard').classList.remove('hidden');
+
+  let headHtml = '<th>Domain</th><th>Status</th><th>Links Count</th>';
+  dcTargetDomains.forEach(td => {
+    headHtml += `<th>${td}</th>`;
+  });
+  document.getElementById('dcHead').innerHTML = headHtml;
+
+  renderDcTable();
+}
+
+function filterDc(status) {
+  dcFilterVal = status;
+  document.querySelectorAll('#dcFilters .btn').forEach(b => {
+    const btnLabel = b.textContent.trim().toLowerCase().replace(/ /g, '_');
+    b.className = 'btn btn-sm ' + (btnLabel === status || (status === 'all' && btnLabel === 'all')
+      ? 'btn-primary' : 'btn-secondary');
+  });
+  renderDcTable();
+}
+
+function renderDcTable() {
+  let filtered = dcResults;
+  if (dcFilterVal === 'ok') filtered = dcResults.filter(r => r.status === 'ok');
+  else if (dcFilterVal === 'error') filtered = dcResults.filter(r => r.status === 'error');
+  else if (dcFilterVal === 'has_target') filtered = dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => r.targets[td]));
+  else if (dcFilterVal === 'no_target') filtered = dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => r.targets[td]));
+
+  const body = document.getElementById('dcBody');
+  body.innerHTML = filtered.map(r => {
+    const statusBadge = r.status === 'ok'
+      ? '<span class="badge badge-checked">OK</span>'
+      : '<span class="badge badge-dead">Error</span>';
+    let row = `<td>${r.domain}</td><td>${statusBadge}</td><td>${r.links_count}</td>`;
+    dcTargetDomains.forEach(td => {
+      if (r.status === 'error') {
+        row += '<td><span class="text-muted">—</span></td>';
+      } else {
+        row += r.targets[td]
+          ? '<td><span style="color:var(--green);font-weight:600">Yes</span></td>'
+          : '<td><span style="color:var(--red)">No</span></td>';
+      }
+    });
+    return `<tr>${row}</tr>`;
+  }).join('');
+
+  if (!filtered.length) {
+    const colSpan = 3 + dcTargetDomains.length;
+    body.innerHTML = `<tr><td colspan="${colSpan}" class="text-muted">No results match the selected filter.</td></tr>`;
+  }
+}
+
+function exportDcCsv() {
+  if (!dcResults.length) return toast('No results to export', 'error');
+  const filtered = dcFilterVal === 'all' ? dcResults : (() => {
+    if (dcFilterVal === 'ok') return dcResults.filter(r => r.status === 'ok');
+    if (dcFilterVal === 'error') return dcResults.filter(r => r.status === 'error');
+    if (dcFilterVal === 'has_target') return dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => r.targets[td]));
+    if (dcFilterVal === 'no_target') return dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => r.targets[td]));
+    return dcResults;
+  })();
+
+  let csv = 'Domain,Status,Links Count';
+  dcTargetDomains.forEach(td => { csv += ',' + td; });
+  csv += '\n';
+
+  filtered.forEach(r => {
+    csv += `"${r.domain}",${r.status},${r.links_count}`;
+    dcTargetDomains.forEach(td => {
+      if (r.status === 'error') csv += ',—';
+      else csv += ',' + (r.targets[td] ? 'Yes' : 'No');
+    });
+    csv += '\n';
+  });
+
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'domain_check_results.csv';
+  a.click();
+}
+</script>
+</body>
+</html>
