@@ -81,9 +81,7 @@ def api_domain_check_start():
             targets.append(d)
 
     if not domains:
-        return jsonify({'error': 'No domains provided'}), 400
-    if not targets:
-        return jsonify({'error': 'No target domains provided'}), 400
+        return jsonify({'error': 'No referring domains provided'}), 400
 
     if domain_check_status.get('running'):
         return jsonify({'error': 'Domain check already in progress'}), 409

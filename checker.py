@@ -213,7 +213,7 @@ def _check_single_domain(domain: str, target_domains: list[str], timeout: int = 
         'targets': {},
     }
     for td in target_domains:
-        result['targets'][td] = False
+        result['targets'][td] = {'found': False, 'anchors': []}
 
     try:
         url = f'https://{domain}/'
@@ -227,7 +227,10 @@ def _check_single_domain(domain: str, target_domains: list[str], timeout: int = 
 
         soup = BeautifulSoup(resp.text, 'html.parser')
         source_domain = get_domain(url)
-        external_links = []
+
+        # collect external links with anchors, grouped by domain
+        domain_anchors: dict[str, list[str]] = {}
+        ext_count = 0
 
         for a in soup.find_all('a', href=True):
             href = a['href']
@@ -238,15 +241,19 @@ def _check_single_domain(domain: str, target_domains: list[str], timeout: int = 
             link_domain = get_domain(full_url)
             if not link_domain or link_domain == source_domain:
                 continue
-            external_links.append(link_domain)
+            ext_count += 1
+            anchor = a.get_text(strip=True) or '[no anchor]'
+            domain_anchors.setdefault(link_domain, []).append(anchor)
 
-        result['links_count'] = len(external_links)
+        result['links_count'] = ext_count
 
-        link_domains_set = set(external_links)
         for td in target_domains:
             td_clean = td.replace('www.', '').lower()
-            if td_clean in link_domains_set:
-                result['targets'][td] = True
+            if td_clean in domain_anchors:
+                result['targets'][td] = {
+                    'found': True,
+                    'anchors': domain_anchors[td_clean],
+                }
 
     except Exception as e:
         result['status'] = 'error'
@@ -298,7 +305,7 @@ def run_domain_check(domains: list[str], target_domains: list[str],
                             'status': 'error',
                             'error': str(e)[:200],
                             'links_count': 0,
-                            'targets': {td: False for td in target_domains},
+                            'targets': {td: {'found': False, 'anchors': []} for td in target_domains},
                         })
                         with _dc_lock:
                             domain_check_status['checked'] += 1

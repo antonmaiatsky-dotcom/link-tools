@@ -188,15 +188,15 @@ https://example.org,https://anotherlink.com,click here"></textarea>
 <div class="tab-content" id="tab-domcheck">
   <div class="card">
     <div class="card-header"><span class="card-title">Domain Check</span></div>
-    <p class="text-sm text-muted mb">Check your domains for external links and whether they link to target domains.</p>
+    <p class="text-sm text-muted mb">Parse referring domains for external links. Optionally check if they link to specific target domains.</p>
     <div class="form-row">
       <div class="form-group" style="flex:1">
-        <label>Target domains (one per line)</label>
-        <textarea id="dcTargets" rows="5" style="width:100%" placeholder="target1.com&#10;target2.com&#10;target3.com"></textarea>
+        <label>Referring domains (one per line)</label>
+        <textarea id="dcDomains" rows="5" style="width:100%" placeholder="ref-site1.com&#10;ref-site2.com&#10;ref-site3.com"></textarea>
       </div>
       <div class="form-group" style="flex:1">
-        <label>My domains to scan (one per line)</label>
-        <textarea id="dcDomains" rows="5" style="width:100%" placeholder="my-site1.com&#10;my-site2.com&#10;my-site3.com"></textarea>
+        <label>Target domains <span class="text-muted">(optional)</span></label>
+        <textarea id="dcTargets" rows="5" style="width:100%" placeholder="target1.com&#10;target2.com&#10;target3.com"></textarea>
       </div>
     </div>
     <div class="form-row items-center mt">
@@ -467,8 +467,7 @@ let dcLastLogLen = 0;
 async function startDomainCheck() {
   const domains = document.getElementById('dcDomains').value.trim();
   const targets = document.getElementById('dcTargets').value.trim();
-  if (!domains) { document.getElementById('dcError').textContent = 'Enter domains to scan'; return; }
-  if (!targets) { document.getElementById('dcError').textContent = 'Enter target domains'; return; }
+  if (!domains) { document.getElementById('dcError').textContent = 'Enter referring domains'; return; }
   document.getElementById('dcError').textContent = '';
 
   document.getElementById('btnDcStart').disabled = true;
@@ -491,9 +490,9 @@ async function startDomainCheck() {
     return;
   }
 
-  dcTargetDomains = targets.split('\n').map(d =>
+  dcTargetDomains = targets ? targets.split('\n').map(d =>
     d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '')
-  ).filter(Boolean);
+  ).filter(Boolean) : [];
 
   document.getElementById('dcProgress').classList.remove('hidden');
   hideDcResults();
@@ -552,9 +551,9 @@ function showDcResults() {
   document.getElementById('dcFilters').style.display = 'flex';
   document.getElementById('dcResultCard').classList.remove('hidden');
 
-  let headHtml = '<th>Domain</th><th>Status</th><th>Links Count</th>';
+  let headHtml = '<th>Referring Domain</th><th>Status</th><th>Ext. Links</th>';
   dcTargetDomains.forEach(td => {
-    headHtml += `<th>${td}</th>`;
+    headHtml += `<th>${td}</th><th>Anchor</th>`;
   });
   document.getElementById('dcHead').innerHTML = headHtml;
 
@@ -571,12 +570,24 @@ function filterDc(status) {
   renderDcTable();
 }
 
+function dcTargetFound(r, td) {
+  const t = r.targets && r.targets[td];
+  if (!t) return false;
+  return typeof t === 'object' ? t.found : !!t;
+}
+
+function dcTargetAnchors(r, td) {
+  const t = r.targets && r.targets[td];
+  if (!t || typeof t !== 'object') return [];
+  return t.anchors || [];
+}
+
 function renderDcTable() {
   let filtered = dcResults;
   if (dcFilterVal === 'ok') filtered = dcResults.filter(r => r.status === 'ok');
   else if (dcFilterVal === 'error') filtered = dcResults.filter(r => r.status === 'error');
-  else if (dcFilterVal === 'has_target') filtered = dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => r.targets[td]));
-  else if (dcFilterVal === 'no_target') filtered = dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => r.targets[td]));
+  else if (dcFilterVal === 'has_target') filtered = dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => dcTargetFound(r, td)));
+  else if (dcFilterVal === 'no_target') filtered = dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => dcTargetFound(r, td)));
 
   const body = document.getElementById('dcBody');
   body.innerHTML = filtered.map(r => {
@@ -586,18 +597,21 @@ function renderDcTable() {
     let row = `<td>${r.domain}</td><td>${statusBadge}</td><td>${r.links_count}</td>`;
     dcTargetDomains.forEach(td => {
       if (r.status === 'error') {
-        row += '<td><span class="text-muted">—</span></td>';
+        row += '<td><span class="text-muted">—</span></td><td></td>';
       } else {
-        row += r.targets[td]
+        const found = dcTargetFound(r, td);
+        const anchors = dcTargetAnchors(r, td);
+        row += found
           ? '<td><span style="color:var(--green);font-weight:600">Yes</span></td>'
           : '<td><span style="color:var(--red)">No</span></td>';
+        row += `<td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${anchors.join(' | ') || ''}</td>`;
       }
     });
     return `<tr>${row}</tr>`;
   }).join('');
 
   if (!filtered.length) {
-    const colSpan = 3 + dcTargetDomains.length;
+    const colSpan = 3 + dcTargetDomains.length * 2;
     body.innerHTML = `<tr><td colspan="${colSpan}" class="text-muted">No results match the selected filter.</td></tr>`;
   }
 }
@@ -607,20 +621,26 @@ function exportDcCsv() {
   const filtered = dcFilterVal === 'all' ? dcResults : (() => {
     if (dcFilterVal === 'ok') return dcResults.filter(r => r.status === 'ok');
     if (dcFilterVal === 'error') return dcResults.filter(r => r.status === 'error');
-    if (dcFilterVal === 'has_target') return dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => r.targets[td]));
-    if (dcFilterVal === 'no_target') return dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => r.targets[td]));
+    if (dcFilterVal === 'has_target') return dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => dcTargetFound(r, td)));
+    if (dcFilterVal === 'no_target') return dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => dcTargetFound(r, td)));
     return dcResults;
   })();
 
-  let csv = 'Domain,Status,Links Count';
-  dcTargetDomains.forEach(td => { csv += ',' + td; });
+  let csv = 'Referring Domain,Status,Ext. Links';
+  dcTargetDomains.forEach(td => { csv += ',' + td + ',Anchor'; });
   csv += '\n';
 
   filtered.forEach(r => {
     csv += `"${r.domain}",${r.status},${r.links_count}`;
     dcTargetDomains.forEach(td => {
-      if (r.status === 'error') csv += ',—';
-      else csv += ',' + (r.targets[td] ? 'Yes' : 'No');
+      if (r.status === 'error') {
+        csv += ',—,';
+      } else {
+        const found = dcTargetFound(r, td);
+        const anchors = dcTargetAnchors(r, td);
+        csv += ',' + (found ? 'Yes' : 'No');
+        csv += ',"' + anchors.join(' | ') + '"';
+      }
     });
     csv += '\n';
   });
