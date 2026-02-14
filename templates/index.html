@@ -135,6 +135,7 @@ https://example.org,https://anotherlink.com,click here"></textarea>
       <div class="form-group" style="justify-content:flex-end">
         <label>&nbsp;</label>
         <button class="btn btn-primary" id="btnLcStart" onclick="startLinkCheck()">Check Links</button>
+        <button class="btn btn-danger hidden" id="btnLcStop" onclick="stopLinkCheck()">Stop</button>
       </div>
     </div>
     <div id="lcError" class="text-sm mt" style="color:var(--red)"></div>
@@ -216,6 +217,7 @@ https://example.org,https://anotherlink.com,click here"></textarea>
       <div class="form-group" style="justify-content:flex-end">
         <label>&nbsp;</label>
         <button class="btn btn-primary" id="btnDcStart" onclick="startDomainCheck()">Check</button>
+        <button class="btn btn-danger hidden" id="btnDcStop" onclick="stopDomainCheck()">Stop</button>
       </div>
     </div>
     <div id="dcError" class="text-sm mt" style="color:var(--red)"></div>
@@ -345,6 +347,7 @@ async function startLinkCheck() {
   }
 
   document.getElementById('lcProgress').classList.remove('hidden');
+  document.getElementById('btnLcStop').classList.remove('hidden');
   hideLcResults();
   lcInterval = setInterval(pollLinkCheck, 800);
 }
@@ -377,6 +380,7 @@ async function pollLinkCheck() {
     clearInterval(lcInterval);
     lcInterval = null;
     document.getElementById('btnLcStart').disabled = false;
+    document.getElementById('btnLcStop').classList.add('hidden');
     showLcSummary(s.counts || {}, s.total);
     lcPage = 1;
     loadLcPage();
@@ -524,6 +528,7 @@ async function startDomainCheck() {
   ).filter(Boolean) : [];
 
   document.getElementById('dcProgress').classList.remove('hidden');
+  document.getElementById('btnDcStop').classList.remove('hidden');
   hideDcResults();
   dcInterval = setInterval(pollDomainCheck, 800);
 }
@@ -555,6 +560,7 @@ async function pollDomainCheck() {
     clearInterval(dcInterval);
     dcInterval = null;
     document.getElementById('btnDcStart').disabled = false;
+    document.getElementById('btnDcStop').classList.add('hidden');
     showDcSummary(s.counts || {}, s.total);
     dcPage = 1;
     loadDcPage();
@@ -676,6 +682,51 @@ async function exportDcCsv() {
   a.download = 'domain_check_results.csv';
   a.click();
 }
+
+/* ═══════════════════════ STOP + ON-LOAD RECONNECT ═══════════════════════ */
+
+async function stopLinkCheck() {
+  await api('/api/link-check/stop', {method: 'POST'});
+  if (lcInterval) { clearInterval(lcInterval); lcInterval = null; }
+  document.getElementById('btnLcStart').disabled = false;
+  document.getElementById('btnLcStop').classList.add('hidden');
+  toast('Link check stopped');
+}
+
+async function stopDomainCheck() {
+  await api('/api/domain-check/stop', {method: 'POST'});
+  if (dcInterval) { clearInterval(dcInterval); dcInterval = null; }
+  document.getElementById('btnDcStart').disabled = false;
+  document.getElementById('btnDcStop').classList.add('hidden');
+  toast('Domain check stopped');
+}
+
+// On page load — reconnect to running checks
+(async function checkOnLoad() {
+  const lc = await api('/api/link-check/status');
+  if (lc.running) {
+    document.getElementById('btnLcStart').disabled = true;
+    document.getElementById('btnLcStop').classList.remove('hidden');
+    document.getElementById('lcProgress').classList.remove('hidden');
+    lcLastLogLen = 0;
+    lcInterval = setInterval(pollLinkCheck, 800);
+  } else if (lc.total > 0 && Object.keys(lc.counts || {}).length) {
+    showLcSummary(lc.counts, lc.total);
+    loadLcPage();
+  }
+
+  const dc = await api('/api/domain-check/status');
+  if (dc.running) {
+    document.getElementById('btnDcStart').disabled = true;
+    document.getElementById('btnDcStop').classList.remove('hidden');
+    document.getElementById('dcProgress').classList.remove('hidden');
+    dcLastLogLen = 0;
+    dcInterval = setInterval(pollDomainCheck, 800);
+  } else if (dc.total > 0 && Object.keys(dc.counts || {}).length) {
+    showDcSummary(dc.counts, dc.total);
+    loadDcPage();
+  }
+})();
 </script>
 </body>
 </html>

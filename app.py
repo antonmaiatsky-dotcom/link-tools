@@ -69,6 +69,12 @@ def api_link_check_status():
     })
 
 
+@app.route('/api/link-check/stop', methods=['POST'])
+def api_link_check_stop():
+    link_check_status['running'] = False
+    return jsonify({'ok': True})
+
+
 def _filter_lc(results, f):
     if f and f != 'all':
         return [r for r in results if r.get('status') == f]
@@ -146,6 +152,12 @@ def api_domain_check_status():
         'counts': domain_check_status.get('counts', {}),
         'log': domain_check_status['log'],
     })
+
+
+@app.route('/api/domain-check/stop', methods=['POST'])
+def api_domain_check_stop():
+    domain_check_status['running'] = False
+    return jsonify({'ok': True})
 
 
 def _dc_target_found(r, td):
