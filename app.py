@@ -12,6 +12,8 @@ from checker import (
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'link-tools-secret')
 
+PER_PAGE = 100
+
 
 # ─── Pages ───────────────────────────────────────────────────────────────────
 
@@ -55,7 +57,51 @@ def api_link_check_start():
 
 @app.route('/api/link-check/status')
 def api_link_check_status():
-    return jsonify(link_check_status)
+    """Lightweight status — no results array."""
+    return jsonify({
+        'running': link_check_status['running'],
+        'total': link_check_status['total'],
+        'checked': link_check_status['checked'],
+        'total_sites': link_check_status['total_sites'],
+        'checked_sites': link_check_status['checked_sites'],
+        'counts': link_check_status.get('counts', {}),
+        'log': link_check_status['log'],
+    })
+
+
+def _filter_lc(results, f):
+    if f and f != 'all':
+        return [r for r in results if r.get('status') == f]
+    return results
+
+
+@app.route('/api/link-check/results')
+def api_link_check_results():
+    """Paginated results. per_page=0 → return all (for CSV export)."""
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = request.args.get('per_page', PER_PAGE, type=int)
+    f = request.args.get('filter', 'all')
+
+    all_results = link_check_status.get('results', [])
+    filtered = _filter_lc(all_results, f)
+    total = len(filtered)
+
+    if per_page <= 0:
+        return jsonify({'page': 1, 'per_page': total, 'total': total,
+                        'total_pages': 1, 'results': filtered})
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    page_results = filtered[start:start + per_page]
+
+    return jsonify({
+        'page': page,
+        'per_page': per_page,
+        'total': total,
+        'total_pages': total_pages,
+        'results': page_results,
+    })
 
 
 # ─── API: Domain Check ───────────────────────────────────────────────────────
@@ -92,7 +138,69 @@ def api_domain_check_start():
 
 @app.route('/api/domain-check/status')
 def api_domain_check_status():
-    return jsonify(domain_check_status)
+    """Lightweight status — no results array."""
+    return jsonify({
+        'running': domain_check_status['running'],
+        'total': domain_check_status['total'],
+        'checked': domain_check_status['checked'],
+        'counts': domain_check_status.get('counts', {}),
+        'log': domain_check_status['log'],
+    })
+
+
+def _dc_target_found(r, td):
+    t = r.get('targets', {}).get(td)
+    if not t:
+        return False
+    if isinstance(t, dict):
+        return t.get('found', False)
+    return bool(t)
+
+
+def _filter_dc(results, f, target_domains):
+    if f == 'ok':
+        return [r for r in results if r.get('status') == 'ok']
+    if f == 'error':
+        return [r for r in results if r.get('status') == 'error']
+    if f == 'has_target':
+        return [r for r in results if r.get('status') == 'ok'
+                and any(_dc_target_found(r, td) for td in target_domains)]
+    if f == 'no_target':
+        return [r for r in results if r.get('status') == 'ok'
+                and not any(_dc_target_found(r, td) for td in target_domains)]
+    return results
+
+
+@app.route('/api/domain-check/results')
+def api_domain_check_results():
+    """Paginated results. per_page=0 → return all (for CSV export)."""
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = request.args.get('per_page', PER_PAGE, type=int)
+    f = request.args.get('filter', 'all')
+    raw_targets = request.args.get('targets', '')
+
+    target_domains = [t.strip() for t in raw_targets.split(',') if t.strip()] if raw_targets else []
+
+    all_results = domain_check_status.get('results', [])
+    filtered = _filter_dc(all_results, f, target_domains)
+    total = len(filtered)
+
+    if per_page <= 0:
+        return jsonify({'page': 1, 'per_page': total, 'total': total,
+                        'total_pages': 1, 'results': filtered})
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    page_results = filtered[start:start + per_page]
+
+    return jsonify({
+        'page': page,
+        'per_page': per_page,
+        'total': total,
+        'total_pages': total_pages,
+        'results': page_results,
+    })
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────

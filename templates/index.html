@@ -181,6 +181,11 @@ https://example.org,https://anotherlink.com,click here"></textarea>
         <tbody id="lcBody"></tbody>
       </table>
     </div>
+    <div id="lcPager" class="flex gap items-center justify-between mt" style="display:none">
+      <button class="btn btn-sm btn-secondary" onclick="lcGo(lcPage-1)">Prev</button>
+      <span class="text-sm text-muted" id="lcPageInfo"></span>
+      <button class="btn btn-sm btn-secondary" onclick="lcGo(lcPage+1)">Next</button>
+    </div>
   </div>
 </div>
 
@@ -253,6 +258,11 @@ https://example.org,https://anotherlink.com,click here"></textarea>
         <tbody id="dcBody"></tbody>
       </table>
     </div>
+    <div id="dcPager" class="flex gap items-center justify-between mt" style="display:none">
+      <button class="btn btn-sm btn-secondary" onclick="dcGo(dcPage-1)">Prev</button>
+      <span class="text-sm text-muted" id="dcPageInfo"></span>
+      <button class="btn btn-sm btn-secondary" onclick="dcGo(dcPage+1)">Next</button>
+    </div>
   </div>
 </div>
 
@@ -277,10 +287,6 @@ function toast(msg, type = 'success') {
   setTimeout(() => t.classList.add('hidden'), 3000);
 }
 
-function badge(status) {
-  return `<span class="badge badge-${status}">${status}</span>`;
-}
-
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -301,8 +307,9 @@ document.querySelectorAll('.tab').forEach(tab => {
 /* ═══════════════════════ LINK CHECK ═══════════════════════ */
 
 let lcInterval = null;
-let lcResults = [];
 let lcFilter = 'all';
+let lcPage = 1;
+let lcTotalPages = 1;
 let lcLastLogLen = 0;
 
 const LC_BADGES = {
@@ -318,8 +325,9 @@ async function startLinkCheck() {
   document.getElementById('lcError').textContent = '';
 
   document.getElementById('btnLcStart').disabled = true;
-  lcResults = [];
   lcLastLogLen = 0;
+  lcFilter = 'all';
+  lcPage = 1;
   document.getElementById('lcLog').innerHTML = '';
 
   const threads = document.getElementById('lcThreads').value;
@@ -369,8 +377,9 @@ async function pollLinkCheck() {
     clearInterval(lcInterval);
     lcInterval = null;
     document.getElementById('btnLcStart').disabled = false;
-    lcResults = s.results || [];
-    showLcResults();
+    showLcSummary(s.counts || {}, s.total);
+    lcPage = 1;
+    loadLcPage();
   }
 }
 
@@ -378,44 +387,51 @@ function hideLcResults() {
   document.getElementById('lcSummary').style.display = 'none';
   document.getElementById('lcFilters').style.display = 'none';
   document.getElementById('lcResultCard').classList.add('hidden');
+  document.getElementById('lcPager').style.display = 'none';
 }
 
-function showLcResults() {
-  if (!lcResults.length) return;
-
-  const counts = {
-    total: lcResults.length,
-    ok: lcResults.filter(r => r.status === 'ok').length,
-    anchor_mismatch: lcResults.filter(r => r.status === 'anchor_mismatch').length,
-    link_not_found: lcResults.filter(r => r.status === 'link_not_found').length,
-    fetch_error: lcResults.filter(r => r.status === 'fetch_error').length,
-  };
-
-  document.getElementById('lcTotal').textContent = counts.total;
-  document.getElementById('lcOk').textContent = counts.ok;
-  document.getElementById('lcMismatch').textContent = counts.anchor_mismatch;
-  document.getElementById('lcNotFound').textContent = counts.link_not_found;
-  document.getElementById('lcErrors').textContent = counts.fetch_error;
-
+function showLcSummary(counts, total) {
+  document.getElementById('lcTotal').textContent = total || 0;
+  document.getElementById('lcOk').textContent = counts.ok || 0;
+  document.getElementById('lcMismatch').textContent = counts.anchor_mismatch || 0;
+  document.getElementById('lcNotFound').textContent = counts.link_not_found || 0;
+  document.getElementById('lcErrors').textContent = counts.fetch_error || 0;
   document.getElementById('lcSummary').style.display = 'grid';
   document.getElementById('lcFilters').style.display = 'flex';
+}
+
+async function loadLcPage() {
+  const r = await api(`/api/link-check/results?page=${lcPage}&filter=${lcFilter}`);
+  lcTotalPages = r.total_pages;
+  lcPage = r.page;
+
   document.getElementById('lcResultCard').classList.remove('hidden');
-  renderLcTable();
+  renderLcTable(r.results);
+
+  const pager = document.getElementById('lcPager');
+  pager.style.display = r.total_pages > 1 ? 'flex' : 'none';
+  document.getElementById('lcPageInfo').textContent = `Page ${r.page} of ${r.total_pages} (${r.total} rows)`;
+}
+
+function lcGo(p) {
+  if (p < 1 || p > lcTotalPages) return;
+  lcPage = p;
+  loadLcPage();
 }
 
 function filterLc(status) {
   lcFilter = status;
+  lcPage = 1;
   document.querySelectorAll('#lcFilters .btn').forEach(b => {
     b.className = 'btn btn-sm ' + (b.textContent.trim().toLowerCase().replace(/ /g,'_') === status || (status === 'all' && b.textContent.trim() === 'All')
       ? 'btn-primary' : 'btn-secondary');
   });
-  renderLcTable();
+  loadLcPage();
 }
 
-function renderLcTable() {
-  const filtered = lcFilter === 'all' ? lcResults : lcResults.filter(r => r.status === lcFilter);
+function renderLcTable(rows) {
   const body = document.getElementById('lcBody');
-  body.innerHTML = filtered.map(r => {
+  body.innerHTML = rows.map(r => {
     const foundAnchors = (r.found_anchors || []).join(' | ') || '—';
     return `<tr>
       <td>${r.row_num}</td>
@@ -429,24 +445,24 @@ function renderLcTable() {
       <td style="font-size:12px;color:var(--red)">${r.error || ''}</td>
     </tr>`;
   }).join('');
-  if (!filtered.length) {
+  if (!rows.length) {
     body.innerHTML = '<tr><td colspan="7" class="text-muted">No results match the selected filter.</td></tr>';
   }
 }
 
-function exportLcCsv() {
-  if (!lcResults.length) return toast('No results to export', 'error');
-  const filtered = lcFilter === 'all' ? lcResults : lcResults.filter(r => r.status === lcFilter);
+async function exportLcCsv() {
+  const r = await api(`/api/link-check/results?per_page=0&filter=${lcFilter}`);
+  if (!r.results || !r.results.length) return toast('No results to export', 'error');
   let csv = 'Row,Site,Expected Link,Expected Anchor,Status,Found Anchors,Error\n';
-  filtered.forEach(r => {
+  r.results.forEach(row => {
     csv += [
-      r.row_num,
-      '"' + r.site + '"',
-      '"' + r.expected_link + '"',
-      '"' + (r.expected_anchor || '') + '"',
-      r.status,
-      '"' + (r.found_anchors || []).join(' | ') + '"',
-      '"' + (r.error || '') + '"',
+      row.row_num,
+      '"' + row.site + '"',
+      '"' + row.expected_link + '"',
+      '"' + (row.expected_anchor || '') + '"',
+      row.status,
+      '"' + (row.found_anchors || []).join(' | ') + '"',
+      '"' + (row.error || '') + '"',
     ].join(',') + '\n';
   });
   const blob = new Blob([csv], {type: 'text/csv'});
@@ -459,10 +475,23 @@ function exportLcCsv() {
 /* ═══════════════════════ DOMAIN CHECK ═══════════════════════ */
 
 let dcInterval = null;
-let dcResults = [];
 let dcTargetDomains = [];
 let dcFilterVal = 'all';
+let dcPage = 1;
+let dcTotalPages = 1;
 let dcLastLogLen = 0;
+
+function dcTargetFound(r, td) {
+  const t = r.targets && r.targets[td];
+  if (!t) return false;
+  return typeof t === 'object' ? t.found : !!t;
+}
+
+function dcTargetAnchors(r, td) {
+  const t = r.targets && r.targets[td];
+  if (!t || typeof t !== 'object') return [];
+  return t.anchors || [];
+}
 
 async function startDomainCheck() {
   const domains = document.getElementById('dcDomains').value.trim();
@@ -471,9 +500,9 @@ async function startDomainCheck() {
   document.getElementById('dcError').textContent = '';
 
   document.getElementById('btnDcStart').disabled = true;
-  dcResults = [];
   dcLastLogLen = 0;
   dcFilterVal = 'all';
+  dcPage = 1;
   document.getElementById('dcLog').innerHTML = '';
 
   const threads = document.getElementById('dcThreads').value;
@@ -526,8 +555,9 @@ async function pollDomainCheck() {
     clearInterval(dcInterval);
     dcInterval = null;
     document.getElementById('btnDcStart').disabled = false;
-    dcResults = s.results || [];
-    showDcResults();
+    showDcSummary(s.counts || {}, s.total);
+    dcPage = 1;
+    loadDcPage();
   }
 }
 
@@ -535,62 +565,62 @@ function hideDcResults() {
   document.getElementById('dcSummary').style.display = 'none';
   document.getElementById('dcFilters').style.display = 'none';
   document.getElementById('dcResultCard').classList.add('hidden');
+  document.getElementById('dcPager').style.display = 'none';
 }
 
-function showDcResults() {
-  if (!dcResults.length) return;
-
-  const okCount = dcResults.filter(r => r.status === 'ok').length;
-  const errCount = dcResults.filter(r => r.status === 'error').length;
-
-  document.getElementById('dcTotal').textContent = dcResults.length;
-  document.getElementById('dcOkCount').textContent = okCount;
-  document.getElementById('dcErrCount').textContent = errCount;
-
+function showDcSummary(counts, total) {
+  document.getElementById('dcTotal').textContent = total || 0;
+  document.getElementById('dcOkCount').textContent = counts.ok || 0;
+  document.getElementById('dcErrCount').textContent = counts.error || 0;
   document.getElementById('dcSummary').style.display = 'grid';
   document.getElementById('dcFilters').style.display = 'flex';
-  document.getElementById('dcResultCard').classList.remove('hidden');
 
+  // build table header
   let headHtml = '<th>Referring Domain</th><th>Status</th><th>Ext. Links</th>';
   dcTargetDomains.forEach(td => {
     headHtml += `<th>${td}</th><th>Anchor</th>`;
   });
   document.getElementById('dcHead').innerHTML = headHtml;
+}
 
-  renderDcTable();
+function dcTargetsParam() {
+  return dcTargetDomains.length ? dcTargetDomains.join(',') : '';
+}
+
+async function loadDcPage() {
+  const tParam = dcTargetsParam();
+  const r = await api(`/api/domain-check/results?page=${dcPage}&filter=${dcFilterVal}&targets=${encodeURIComponent(tParam)}`);
+  dcTotalPages = r.total_pages;
+  dcPage = r.page;
+
+  document.getElementById('dcResultCard').classList.remove('hidden');
+  renderDcTable(r.results);
+
+  const pager = document.getElementById('dcPager');
+  pager.style.display = r.total_pages > 1 ? 'flex' : 'none';
+  document.getElementById('dcPageInfo').textContent = `Page ${r.page} of ${r.total_pages} (${r.total} rows)`;
+}
+
+function dcGo(p) {
+  if (p < 1 || p > dcTotalPages) return;
+  dcPage = p;
+  loadDcPage();
 }
 
 function filterDc(status) {
   dcFilterVal = status;
+  dcPage = 1;
   document.querySelectorAll('#dcFilters .btn').forEach(b => {
     const btnLabel = b.textContent.trim().toLowerCase().replace(/ /g, '_');
     b.className = 'btn btn-sm ' + (btnLabel === status || (status === 'all' && btnLabel === 'all')
       ? 'btn-primary' : 'btn-secondary');
   });
-  renderDcTable();
+  loadDcPage();
 }
 
-function dcTargetFound(r, td) {
-  const t = r.targets && r.targets[td];
-  if (!t) return false;
-  return typeof t === 'object' ? t.found : !!t;
-}
-
-function dcTargetAnchors(r, td) {
-  const t = r.targets && r.targets[td];
-  if (!t || typeof t !== 'object') return [];
-  return t.anchors || [];
-}
-
-function renderDcTable() {
-  let filtered = dcResults;
-  if (dcFilterVal === 'ok') filtered = dcResults.filter(r => r.status === 'ok');
-  else if (dcFilterVal === 'error') filtered = dcResults.filter(r => r.status === 'error');
-  else if (dcFilterVal === 'has_target') filtered = dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => dcTargetFound(r, td)));
-  else if (dcFilterVal === 'no_target') filtered = dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => dcTargetFound(r, td)));
-
+function renderDcTable(rows) {
   const body = document.getElementById('dcBody');
-  body.innerHTML = filtered.map(r => {
+  body.innerHTML = rows.map(r => {
     const statusBadge = r.status === 'ok'
       ? '<span class="badge badge-checked">OK</span>'
       : '<span class="badge badge-dead">Error</span>';
@@ -610,34 +640,29 @@ function renderDcTable() {
     return `<tr>${row}</tr>`;
   }).join('');
 
-  if (!filtered.length) {
+  if (!rows.length) {
     const colSpan = 3 + dcTargetDomains.length * 2;
     body.innerHTML = `<tr><td colspan="${colSpan}" class="text-muted">No results match the selected filter.</td></tr>`;
   }
 }
 
-function exportDcCsv() {
-  if (!dcResults.length) return toast('No results to export', 'error');
-  const filtered = dcFilterVal === 'all' ? dcResults : (() => {
-    if (dcFilterVal === 'ok') return dcResults.filter(r => r.status === 'ok');
-    if (dcFilterVal === 'error') return dcResults.filter(r => r.status === 'error');
-    if (dcFilterVal === 'has_target') return dcResults.filter(r => r.status === 'ok' && dcTargetDomains.some(td => dcTargetFound(r, td)));
-    if (dcFilterVal === 'no_target') return dcResults.filter(r => r.status === 'ok' && !dcTargetDomains.some(td => dcTargetFound(r, td)));
-    return dcResults;
-  })();
+async function exportDcCsv() {
+  const tParam = dcTargetsParam();
+  const r = await api(`/api/domain-check/results?per_page=0&filter=${dcFilterVal}&targets=${encodeURIComponent(tParam)}`);
+  if (!r.results || !r.results.length) return toast('No results to export', 'error');
 
   let csv = 'Referring Domain,Status,Ext. Links';
   dcTargetDomains.forEach(td => { csv += ',' + td + ',Anchor'; });
   csv += '\n';
 
-  filtered.forEach(r => {
-    csv += `"${r.domain}",${r.status},${r.links_count}`;
+  r.results.forEach(row => {
+    csv += `"${row.domain}",${row.status},${row.links_count}`;
     dcTargetDomains.forEach(td => {
-      if (r.status === 'error') {
+      if (row.status === 'error') {
         csv += ',—,';
       } else {
-        const found = dcTargetFound(r, td);
-        const anchors = dcTargetAnchors(r, td);
+        const found = dcTargetFound(row, td);
+        const anchors = dcTargetAnchors(row, td);
         csv += ',' + (found ? 'Yes' : 'No');
         csv += ',"' + anchors.join(' | ') + '"';
       }

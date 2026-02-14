@@ -143,6 +143,7 @@ def run_link_check(rows: list, max_threads: int = 5, timeout: int = 15):
         link_check_status['total_sites'] = len(site_groups)
         link_check_status['checked_sites'] = 0
         link_check_status['results'] = []
+        link_check_status['counts'] = {}
         link_check_status['log'] = []
 
     all_results = []
@@ -180,8 +181,14 @@ def run_link_check(rows: list, max_threads: int = 5, timeout: int = 15):
                             })
 
             all_results.sort(key=lambda r: r['row_num'])
+            counts = {'ok': 0, 'anchor_mismatch': 0, 'link_not_found': 0, 'fetch_error': 0}
+            for r in all_results:
+                s = r.get('status', '')
+                if s in counts:
+                    counts[s] += 1
             with _lc_lock:
                 link_check_status['results'] = all_results
+                link_check_status['counts'] = counts
         finally:
             with _lc_lock:
                 link_check_status['running'] = False
@@ -272,6 +279,7 @@ def run_domain_check(domains: list[str], target_domains: list[str],
         domain_check_status['total'] = len(domains)
         domain_check_status['checked'] = 0
         domain_check_status['results'] = []
+        domain_check_status['counts'] = {}
         domain_check_status['log'] = []
 
     all_results = []
@@ -317,8 +325,14 @@ def run_domain_check(domains: list[str], target_domains: list[str],
                             })
 
             all_results.sort(key=lambda r: r['domain'])
+            counts = {'ok': 0, 'error': 0}
+            for r in all_results:
+                s = r.get('status', '')
+                if s in counts:
+                    counts[s] += 1
             with _dc_lock:
                 domain_check_status['results'] = all_results
+                domain_check_status['counts'] = counts
         finally:
             with _dc_lock:
                 domain_check_status['running'] = False
